@@ -24,7 +24,7 @@ portrait = Image.new('1', (32, 128), 1)
 x_off = (32 - new_w) // 2
 portrait.paste(icon, (x_off, 0))
 
-native = portrait.transpose(Image.ROTATE_270)
+native = portrait.transpose(Image.ROTATE_90)
 px = native.load()
 
 out = []
