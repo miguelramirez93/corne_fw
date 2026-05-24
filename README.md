@@ -204,30 +204,57 @@ Mods and host-OS were intentionally **not** displayed on the slave: enabling any
 - Per-layer color set in `layer_state_set_user` using `_noeeprom` variants (no flash wear)
 - Brightness capped at `RGBLIGHT_LIMIT_VAL 180` (~70%) to keep current under TRRS comfort
 
-## Image conversion (slave OLED art)
+## Image conversion (OLED art)
 
-The `tools/` scripts convert PNGs to the SSD1306 page-byte format that `oled_write_raw_P` expects.
+There are **two different image encodings** in this firmware, picked based on which OLED API the renderer uses. They are not interchangeable — picking the wrong one is the most common cause of "image is broken/garbled" on Corne + RP2040.
 
-Generate a new bulldog from `corne_logo.png`:
+### Encoding A — SSD1306 page-byte (for `oled_write_raw_P`)
+
+- Used on **master** for the animated dog frames.
+- 512 bytes total = 4 pages × 128 cols, each byte = 8 vertical pixels, LSB = top.
+- Bytes go directly into the SSD1306 framebuffer **without QMK's rotation transform** (see "Known oddity" below).
+- Tools:
+  - `tools/png2oled.py` — image centered in 32×128 portrait
+  - `tools/png2oled_top.py` — image placed at top
+  - `tools/png2oled_top_strict.py` — top placement + autocontrast + adjustable threshold (strips watermarks)
+  - `tools/preview_bulldog.py` — decodes a byte array back to PNGs to sanity-check before flashing
+  - `tools/inspect_dog.py` — ASCII art preview of a byte array
+  - `tools/render_logo.py` — PNG preview of the `raw_logo` dog
+  - `tools/make_frame_b.py`, `tools/wag_tail.py` — generate animation frames from a base frame
+
+### Encoding B — row-major 32×32 bitmap (for `oled_write_pixel`)
+
+- Used on **slave** for the bulldog face.
+- 128 bytes total = 32 rows × 4 bytes (MSB-first within each byte).
+- Rendered pixel-by-pixel through `oled_write_pixel(x, y, on)` so QMK's rotation transform IS applied. Slower (1024 calls per frame) but always orientation-correct.
+- Tool:
+  - `tools/png2pixels.py` — converts PNG to a `static const uint8_t PROGMEM bulldog_pixels[128]` array
+
+Regenerate the bulldog from the included PNG:
 
 ```bash
-python3 tools/png2oled_top_strict.py tools/corne_logo.png 32 80
+python3 tools/png2pixels.py tools/corne_logo.png 32 80
 ```
 
-Arguments: `<source-png> <target-height> <black-threshold>`. Output is a `static const char PROGMEM bulldog_top[] = { … };` 512-byte array — paste it into `keymap.c` replacing the existing one.
+Arguments: `<source-png> <target-height> <black-threshold>`. Paste the output into `keymap.c` replacing the existing `bulldog_pixels[]`.
 
-Preview a byte array:
+### Known oddity — `oled_write_raw_P` does NOT honor rotation here
 
-```bash
-python3 tools/inspect_dog.py     # ASCII art to stdout
-python3 tools/render_logo.py     # writes /tmp/raw_logo_preview.png
-```
+On this combination (QMK + RP2040 + Elite-Pi converter + crkbd/rev1 + SSD1306 OLED), `oled_write_raw_P` writes bytes directly to the framebuffer in **native landscape layout (128×32)**, *ignoring* the `OLED_ROTATION_270` setting. Bytes appear on the display as if rotation were `OLED_ROTATION_0`.
+
+If you've prepared bytes for the rotated portrait orientation (32×128) and use `oled_write_raw_P`, the image comes out garbled, squashed, or with gaps. **Two workarounds**:
+
+1. **Use `oled_write_pixel` per pixel** (what the slave bulldog does). Goes through the rotation transform, always correct, slightly slower.
+2. **Pre-encode the bytes to match the native landscape layout** that the buffer expects (what the master dog frames effectively do — those bytes happen to land in the right place because they were short, top-of-buffer writes that visually align with "top of portrait").
+
+For new art on the slave OLED, prefer approach 1. For the dog animation we keep approach 2 because the byte arrays were already known-good and re-encoding them per-pixel would balloon the keymap size unnecessarily for a 4-frame loop.
 
 ## Caveats / known issues
 
 - **TRRS cable matters.** Long, thin, or unshielded cables cause symptoms like "slave LEDs dark while everything else works" (power sag) or "slave silently drops off" (signal integrity). Prefer short (< 50 cm) shielded TRRS cables sold for split keyboards.
 - **Avoid extra split sync** on this hardware. `SPLIT_WPM_ENABLE` and custom `SPLIT_TRANSACTION_IDS_USER` both reproducibly cause slave disconnects. Anything you want to show on the slave OLED must be computed locally on the slave or be a static asset.
 - **OS detection delay**: `detected_host_os()` returns `OS_UNSURE` for ~2 s after plugging in. The screenshot key defaults to macOS during that window.
+- **`oled_write_raw_P` ignores rotation.** See "Known oddity" in the image-conversion section. Use `oled_write_pixel` for any new art that needs portrait orientation.
 
 ## License
 
