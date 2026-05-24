@@ -1,0 +1,51 @@
+raw_logo = [
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xe0, 0x1c, 0x02, 0x05, 0x02, 0x24, 0x04, 0x04, 0x02, 0xa9, 0x1e, 0xe0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0xe0, 0x90, 0x08, 0x18, 0x60, 0x10, 0x08, 0x04, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x0e, 0x82, 0x7c, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x04, 0x0c, 0x10, 0x10, 0x20, 0x20, 0x20, 0x28, 0x3e, 0x1c, 0x20, 0x20, 0x3e, 0x0f, 0x11, 0x1f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+]
+
+def get_pixel(bytes_in, row, col):
+    return bool(bytes_in[(row // 8) * 32 + col] & (1 << (row % 8)))
+
+def set_pixel(bytes_inout, row, col, val):
+    idx = (row // 8) * 32 + col
+    bit = 1 << (row % 8)
+    if val:
+        bytes_inout[idx] |= bit
+    else:
+        bytes_inout[idx] &= ~bit & 0xFF
+
+# Tail tip region: rows 10-15, cols 5-12
+tail_pixels = []
+for row in range(10, 16):
+    for col in range(5, 13):
+        if get_pixel(raw_logo, row, col):
+            tail_pixels.append((row, col))
+
+frame_b = list(raw_logo)
+for (row, col) in tail_pixels:
+    set_pixel(frame_b, row, col, 0)
+for (row, col) in tail_pixels:
+    new_row = row - 1
+    if new_row >= 0:
+        set_pixel(frame_b, new_row, col, 1)
+
+def emit_array(name, data):
+    print(f"static const char PROGMEM {name}[] = {{")
+    for page in range(3):
+        chunk = data[page*32:(page+1)*32]
+        line = ", ".join(f"0x{b:02x}" for b in chunk)
+        print(f"    {line},")
+    print("};")
+
+emit_array("dog_frame_a", raw_logo)
+print()
+emit_array("dog_frame_b", frame_b)
+
+# Print Frame B as ASCII for sanity check
+print()
+print("Frame B preview:")
+print("   " + "".join(f"{c%10}" for c in range(32)))
+for row in range(24):
+    line = "".join("#" if get_pixel(frame_b, row, col) else "." for col in range(32))
+    print(f"{row:2} {line}")
