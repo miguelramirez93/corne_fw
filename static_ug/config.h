@@ -6,7 +6,10 @@
 #undef RGBLIGHT_SPLIT_COUNT
 #define RGBLIGHT_SPLIT_COUNT { 6, 6 }
 
-#define RGBLIGHT_SPLIT
+// RGBLIGHT_SPLIT intentionally disabled — sync packets are unreliable on
+// the RP2040 + elite_pi serial transport. Each half drives its own LEDs
+// locally from the synced layer state instead (see layer_state_set_user).
+// #define RGBLIGHT_SPLIT
 #define SPLIT_LAYER_STATE_ENABLE
 #define SPLIT_LED_STATE_ENABLE
 

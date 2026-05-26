@@ -4,8 +4,8 @@ Custom QMK firmware for a Corne (`crkbd/rev1`) split keyboard running on Elite-P
 
 ## Features
 
-- **4 layers**: BASE / NAV / SYM / MEDIA
-- **Per-layer underglow color** (BASE off, NAV cyan, SYM purple, MEDIA red)
+- **4 layers**: BASE / NAV / SYM / FN
+- **Per-layer underglow color** (BASE off, NAV cyan, SYM purple, FN red)
 - **Underglow only**: per-key LEDs disabled, only the 6 underglow LEDs per side
 - **Master OLED**: animated dog (WPM-reactive), current layer, Caps Lock, active modifiers
 - **Slave OLED**: static bulldog face
@@ -91,7 +91,7 @@ Each half is flashed independently.
 Symbol legend in the diagrams:
 - `____` = transparent (falls through to lower active layer)
 - `XXXX` = no-op (KC_NO)
-- Inner thumb keys: `MO(1)` = hold for NAV, `MO(2)` = hold for SYM; holding both activates MEDIA via the `MO(3)` chord.
+- Inner thumb keys: `MO(1)` = hold for NAV, `MO(2)` = hold for SYM; holding both activates FN via the `MO(3)` chord.
 
 ### Layer 0 — BASE (underglow off)
 
@@ -139,23 +139,24 @@ Hold right inner thumb.
                └────┴────┴────┘   └────┴────┴────┘
 ```
 
-### Layer 3 — MEDIA (red underglow)
+### Layer 3 — FN (red underglow)
 
 Hold both inner thumbs (tri-layer chord).
 
 ```
 ┌────┬────┬────┬────┬────┬────┐   ┌────┬────┬────┬────┬────┬────┐
-│BOOT│XXXX│XXXX│XXXX│XXXX│XXXX│   │XXXX│XXXX│XXXX│XXXX│XXXX│XXXX│
+│ F1 │ F2 │ F3 │ F4 │ F5 │ F6 │   │ F7 │ F8 │ F9 │F10 │F11 │F12 │
 ├────┼────┼────┼────┼────┼────┤   ├────┼────┼────┼────┼────┼────┤
 │XXXX│XXXX│SHOT│XXXX│XXXX│XXXX│   │MUTE│PREV│PLAY│NEXT│XXXX│XXXX│
 ├────┼────┼────┼────┼────┼────┤   ├────┼────┼────┼────┼────┼────┤
-│XXXX│XXXX│XXXX│XXXX│XXXX│XXXX│   │XXXX│VOL-│VOL+│XXXX│XXXX│XXXX│
+│XXXX│XXXX│XXXX│XXXX│XXXX│BOOT│   │XXXX│VOL-│VOL+│XXXX│XXXX│XXXX│
 └────┴────┴────┼────┼────┼────┤   ├────┼────┼────┼────┴────┴────┘
                │LGUI│ ▲  │SPC │   │ENT │ ▲  │RALT│
                └────┴────┴────┘   └────┴────┴────┘
 ```
 
-- `BOOT` = `QK_BOOT` (enter bootloader, no physical reset needed).
+- Top row: `F1`–`F12`.
+- `BOOT` = `QK_BOOT` (enter bootloader, no physical reset needed). Located at the **B position** (left half, bottom row, inner-most key).
 - `SHOT` = `SS_SEL` (OS-aware selection screenshot):
   - macOS / iOS / unknown → ⌘⇧4 (screenshot selection → file on Desktop)
   - Windows → ⊞+⇧+S (Snipping Tool selection → clipboard)
@@ -172,7 +173,7 @@ Hold both inner thumbs (tri-layer chord).
 │ 🐕   │      WPM 1–29  → 350 ms
 │     │      WPM 30+   → 150 ms
 │Layer│
-│NAV  │  ← BASE / NAV / SYM / MEDIA
+│NAV  │  ← BASE / NAV / SYM / FN
 │     │
 │Caps │
 │ON   │  ← ON when Caps Lock engaged, OFF otherwise
@@ -203,6 +204,7 @@ Mods and host-OS were intentionally **not** displayed on the slave: enabling any
 - Static color, no animation modes compiled — saves flash and keeps power draw predictable across the TRRS link
 - Per-layer color set in `layer_state_set_user` using `_noeeprom` variants (no flash wear)
 - Brightness capped at `RGBLIGHT_LIMIT_VAL 180` (~70%) to keep current under TRRS comfort
+- **`RGBLIGHT_SPLIT` is intentionally NOT defined.** On this RP2040 + elite_pi serial transport the RGB sync packets are unreliable — slave would stay dark while master lit up. Workaround: each half computes its color independently from the synced layer state (`SPLIT_LAYER_STATE_ENABLE` covers that). Since `layer_state_set_user` runs on both halves, both call `rgblight_sethsv_noeeprom(...)` locally and drive their own LED chain. Net effect: identical color on both halves without needing the buggy RGB sync.
 
 ## Image conversion (OLED art)
 
