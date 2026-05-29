@@ -4,6 +4,7 @@
 #endif
 #include "os_detection.h"
 #include "send_string.h"
+#include "ws2812.h"
 enum custom_keycodes {
     SS_SEL = SAFE_RANGE,
 };
@@ -36,19 +37,14 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     [3] = LAYOUT_split_3x6_3(KC_F1,  KC_F2, KC_F3, KC_F4, KC_F5, KC_F6, KC_F7, KC_F8, KC_F9, KC_F10, KC_F11, KC_F12, KC_NO,    KC_NO,   SS_SEL,  KC_NO,   KC_NO, KC_NO, KC_MUTE, KC_MPRV, KC_MPLY, KC_MNXT, KC_NO, KC_NO, KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO, QK_BOOT, KC_NO, KC_VOLD, KC_VOLU, KC_NO, KC_NO, KC_NO, KC_LGUI, KC_TRNS, KC_SPC, KC_ENT, KC_TRNS, KC_RALT)
 };
 
-static void apply_layer_color(uint8_t layer) {
-    switch (layer) {
-        case 1: rgblight_sethsv_noeeprom(HSV_CYAN);   break;
-        case 2: rgblight_sethsv_noeeprom(HSV_PURPLE); break;
-        case 3: rgblight_sethsv_noeeprom(HSV_RED);    break;
-        default: rgblight_sethsv_noeeprom(HSV_OFF);   break;
-    }
+void keyboard_post_init_user(void) {
+    ws2812_set_color_all(0, 0, 0);
+    ws2812_flush();
 }
 
-void keyboard_post_init_user(void) {
-    rgblight_enable_noeeprom();
-    rgblight_mode_noeeprom(RGBLIGHT_MODE_STATIC_LIGHT);
-    apply_layer_color(0);
+static void force_leds(uint8_t r, uint8_t g, uint8_t b) {
+    ws2812_set_color_all(r, g, b);
+    ws2812_flush();
 }
 
 void housekeeping_task_user(void) {
@@ -56,7 +52,12 @@ void housekeeping_task_user(void) {
     uint8_t layer = get_highest_layer(layer_state);
     if (layer != last_layer) {
         last_layer = layer;
-        apply_layer_color(layer);
+        switch (layer) {
+            case 1: force_leds(0, 80, 80); break;   // cyan (test direct WS2812)
+            case 2: force_leds(60, 0, 80); break;   // purple
+            case 3: force_leds(80, 0, 0); break;    // red
+            default: force_leds(0, 0, 0); break;    // off
+        }
     }
 }
 

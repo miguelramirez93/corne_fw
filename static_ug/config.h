@@ -1,15 +1,13 @@
 #pragma once
 
+// Each half is treated as a plain 6-LED chain with no split-RGB logic at all.
+// We rely on SPLIT_LAYER_STATE_ENABLE to sync the layer variable, then each
+// half independently drives its own LEDs from housekeeping_task_user.
 #undef RGBLIGHT_LED_COUNT
-#define RGBLIGHT_LED_COUNT 12
+#define RGBLIGHT_LED_COUNT 6
 
-#undef RGBLIGHT_SPLIT_COUNT
-#define RGBLIGHT_SPLIT_COUNT { 6, 6 }
-
-// RGBLIGHT_SPLIT intentionally disabled — sync packets are unreliable on
-// the RP2040 + elite_pi serial transport. Each half drives its own LEDs
-// locally from the synced layer state instead (see layer_state_set_user).
-// #define RGBLIGHT_SPLIT
+// RGBLIGHT_SPLIT_COUNT and RGBLIGHT_SPLIT intentionally NOT defined — they
+// activate split-aware RGB logic that proved unreliable on this RP2040 build.
 #define SPLIT_LAYER_STATE_ENABLE
 #define SPLIT_LED_STATE_ENABLE
 

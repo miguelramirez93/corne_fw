@@ -1,6 +1,6 @@
 # corne_fw — Corne RP2040 firmware (`static_ug` keymap)
 
-Custom QMK firmware for a Corne (`crkbd/rev1`) split keyboard running on Elite-Pi (RP2040) controllers, converted from the original AVR build via `CONVERT_TO=elite_pi`.
+Custom QMK firmware for a Corne (`crkbd/rev1`) split keyboard running on Elite-Pi (RP2040) controllers, converted from the original AVR build via `CONVERT_TO=rp2040_ce`.
 
 ## Features
 
@@ -69,7 +69,7 @@ export PATH="/opt/homebrew/opt/arm-none-eabi-gcc@8/bin:/opt/homebrew/opt/arm-non
 ```bash
 export PATH="/opt/homebrew/opt/arm-none-eabi-gcc@8/bin:/opt/homebrew/opt/arm-none-eabi-binutils/bin:$PATH"
 cd ~/qmk_firmware
-qmk compile -kb crkbd/rev1 -km static_ug -e CONVERT_TO=elite_pi
+qmk compile -kb crkbd/rev1 -km static_ug -e CONVERT_TO=rp2040_ce
 ```
 
 Output: `~/qmk_firmware/crkbd_rev1_static_ug_elite_pi.uf2`
@@ -199,12 +199,45 @@ Mods and host-OS were intentionally **not** displayed on the slave: enabling any
 
 ## RGB / underglow config
 
-- `RGBLIGHT_ENABLE = yes`, `RGB_MATRIX_ENABLE = no`
-- 12 underglow LEDs total, 6 per side (`RGBLIGHT_LED_COUNT 12`, `RGBLIGHT_SPLIT_COUNT { 6, 6 }`)
-- Static color, no animation modes compiled — saves flash and keeps power draw predictable across the TRRS link
-- Per-layer color set in `layer_state_set_user` using `_noeeprom` variants (no flash wear)
-- Brightness capped at `RGBLIGHT_LIMIT_VAL 180` (~70%) to keep current under TRRS comfort
-- **`RGBLIGHT_SPLIT` is intentionally NOT defined.** On this RP2040 + elite_pi serial transport the RGB sync packets are unreliable — slave would stay dark while master lit up. Workaround: each half computes its color independently from the synced layer state (`SPLIT_LAYER_STATE_ENABLE` covers that). Since `layer_state_set_user` runs on both halves, both call `rgblight_sethsv_noeeprom(...)` locally and drive their own LED chain. Net effect: identical color on both halves without needing the buggy RGB sync.
+- `RGBLIGHT_ENABLE = yes` (subsystem compiled in, but **not used at runtime** — see below), `RGB_MATRIX_ENABLE = no`
+- 6 underglow LEDs per side (`RGBLIGHT_LED_COUNT 6`, no `RGBLIGHT_SPLIT_COUNT`, no `RGBLIGHT_SPLIT`)
+- Brightness capped at `RGBLIGHT_LIMIT_VAL 180` (~70%) — vestigial, doesn't affect anything now that we bypass RGBLIGHT
+- **Each half drives its own LEDs via direct `ws2812_set_color_all()` + `ws2812_flush()` calls.** The RGBLIGHT subsystem is bypassed entirely.
+
+### Why direct WS2812 instead of RGBLIGHT
+
+We went through three iterations before landing here:
+
+1. **First attempt — `RGBLIGHT_SPLIT` ON.** Master pushes RGB state to slave via the split transport. Failed: sync packets are unreliable on this RP2040 + RP2040 serial half-duplex transport. Slave stays at boot-default (off) and only flickers to the right color when master triggers a layer change, then drops back.
+
+2. **Second attempt — `RGBLIGHT_SPLIT` OFF, slave calls `rgblight_sethsv_noeeprom` locally from `housekeeping_task_user`.** Each half independently runs the same RGBLIGHT update code on the synced layer state. Failed too: confirmed via OLED diagnostic that `layer_state` syncs correctly to the slave, but the slave's `rgblight_sethsv_noeeprom` call doesn't actually produce LED output. The RGBLIGHT subsystem on this build appears to have some master-only guard somewhere in its hot path, even with `RGBLIGHT_SPLIT` undefined.
+
+3. **Final solution — bypass RGBLIGHT.** From `housekeeping_task_user`, when the synced layer changes, call `ws2812_set_color_all(r, g, b)` + `ws2812_flush()` directly. This is QMK's lowest-level LED driver API and it has no concept of master/slave. Both halves drive their local WS2812 chains the same way. Works perfectly.
+
+### Code
+
+```c
+static void force_leds(uint8_t r, uint8_t g, uint8_t b) {
+    ws2812_set_color_all(r, g, b);
+    ws2812_flush();
+}
+
+void housekeeping_task_user(void) {
+    static uint8_t last_layer = 0xFF;
+    uint8_t layer = get_highest_layer(layer_state);
+    if (layer != last_layer) {
+        last_layer = layer;
+        switch (layer) {
+            case 1: force_leds(0, 80, 80); break;   // NAV → cyan
+            case 2: force_leds(60, 0, 80); break;   // SYM → purple
+            case 3: force_leds(80, 0, 0); break;    // FN  → red
+            default: force_leds(0, 0, 0); break;    // BASE → off
+        }
+    }
+}
+```
+
+Colors are raw RGB values in QMK's WS2812 driver order (G, R, B is what the WS2812 chip wants on the wire, but the `ws2812_set_color_all` helper takes them in R, G, B order). Adjust intensities by tweaking the numbers.
 
 ## Image conversion (OLED art)
 
@@ -255,6 +288,7 @@ For new art on the slave OLED, prefer approach 1. For the dog animation we keep 
 
 - **TRRS cable matters.** Long, thin, or unshielded cables cause symptoms like "slave LEDs dark while everything else works" (power sag) or "slave silently drops off" (signal integrity). Prefer short (< 50 cm) shielded TRRS cables sold for split keyboards.
 - **Avoid extra split sync** on this hardware. `SPLIT_WPM_ENABLE` and custom `SPLIT_TRANSACTION_IDS_USER` both reproducibly cause slave disconnects. Anything you want to show on the slave OLED must be computed locally on the slave or be a static asset.
+- **RGBLIGHT subsystem is bypassed entirely**. Don't call `rgblight_*` functions — they silently no-op on the slave half in this build for reasons we couldn't pin down. Use `ws2812_set_color_all()` + `ws2812_flush()` instead. See "RGB / underglow config" for the working pattern.
 - **OS detection delay**: `detected_host_os()` returns `OS_UNSURE` for ~2 s after plugging in. The screenshot key defaults to macOS during that window.
 - **`oled_write_raw_P` ignores rotation.** See "Known oddity" in the image-conversion section. Use `oled_write_pixel` for any new art that needs portrait orientation.
 
