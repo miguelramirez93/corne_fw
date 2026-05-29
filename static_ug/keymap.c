@@ -10,7 +10,21 @@ enum custom_keycodes {
 };
 
 static uint32_t master_last_activity = 0;
+static uint32_t slave_last_activity = 0;
 #define MASTER_OLED_TIMEOUT_MS 60000
+#define SLAVE_OLED_TIMEOUT_MS 60000
+
+void matrix_scan_user(void) {
+    if (!is_keyboard_master()) {
+        for (uint8_t row = 0; row < MATRIX_ROWS; row++) {
+            if (matrix_get_row(row) != 0) {
+                slave_last_activity = timer_read32();
+                if (!is_oled_on()) oled_on();
+                return;
+            }
+        }
+    }
+}
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     if (record->event.pressed) {
@@ -74,9 +88,17 @@ void housekeeping_task_user(void) {
                 default: force_leds(0, 0, 0); break;
             }
         }
+        if (!is_keyboard_master()) {
+            slave_last_activity = timer_read32();
+            if (!is_oled_on()) oled_on();
+        }
     }
     if (is_keyboard_master() && is_oled_on() &&
         timer_elapsed32(master_last_activity) > MASTER_OLED_TIMEOUT_MS) {
+        oled_off();
+    }
+    if (!is_keyboard_master() && is_oled_on() &&
+        timer_elapsed32(slave_last_activity) > SLAVE_OLED_TIMEOUT_MS) {
         oled_off();
     }
 }
@@ -136,7 +158,6 @@ static const uint8_t PROGMEM bulldog_pixels[128] = {
 
 static void render_master(void) {
     if (!is_oled_on()) return;
-    oled_clear();
     static uint32_t anim_timer = 0;
     static uint8_t frame_idx = 0;
     if (timer_elapsed32(anim_timer) > 350) {
@@ -158,7 +179,7 @@ static void render_master(void) {
 }
 
 static void render_slave(void) {
-    oled_clear();
+    if (!is_oled_on()) return;
     for (uint8_t row = 0; row < 32; row++) {
         for (uint8_t col_byte = 0; col_byte < 4; col_byte++) {
             uint8_t byte = pgm_read_byte(&bulldog_pixels[row * 4 + col_byte]);
@@ -177,9 +198,9 @@ static void render_slave(void) {
     uint8_t s = uptime_s % 60;
     char buf[8];
     if (h > 0) {
-        snprintf(buf, sizeof(buf), "%lu:%02u", (unsigned long)h, m);
+        snprintf(buf, sizeof(buf), "%2lu:%02u", (unsigned long)h, m);
     } else {
-        snprintf(buf, sizeof(buf), "%u:%02u", m, s);
+        snprintf(buf, sizeof(buf), "%02u:%02u", m, s);
     }
     oled_write(buf, false);
 }
