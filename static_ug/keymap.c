@@ -11,11 +11,8 @@ enum custom_keycodes {
 
 static uint32_t master_last_activity = 0;
 static uint32_t slave_last_activity = 0;
-static uint32_t bark_until = 0;
 #define MASTER_OLED_TIMEOUT_MS 60000
 #define SLAVE_OLED_TIMEOUT_MS 60000
-#define BARK_IDLE_THRESHOLD_MS 2000
-#define BARK_DURATION_MS 1000
 
 void matrix_scan_user(void) {
     if (!is_keyboard_master()) {
@@ -31,9 +28,6 @@ void matrix_scan_user(void) {
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     if (record->event.pressed) {
-        if (timer_elapsed32(master_last_activity) > BARK_IDLE_THRESHOLD_MS) {
-            bark_until = timer_read32() + BARK_DURATION_MS;
-        }
         master_last_activity = timer_read32();
         if (!is_oled_on()) {
             oled_on();
@@ -184,7 +178,7 @@ static void render_master(void) {
         anim_timer = timer_read32();
         frame_idx ^= 1;
     }
-    bool barking = timer_read32() < bark_until;
+    bool barking = wpm > 0;
     const char *frame;
     if (barking) {
         frame = (frame_idx == 0) ? bark_frame_a : bark_frame_b;
