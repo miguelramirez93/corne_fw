@@ -9,7 +9,16 @@ enum custom_keycodes {
     SS_SEL = SAFE_RANGE,
 };
 
+static uint32_t master_last_activity = 0;
+#define MASTER_OLED_TIMEOUT_MS 60000
+
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+    if (record->event.pressed) {
+        master_last_activity = timer_read32();
+        if (!is_oled_on()) {
+            oled_on();
+        }
+    }
     if (record->event.pressed && keycode == SS_SEL) {
         switch (detected_host_os()) {
             case OS_WINDOWS:
@@ -53,11 +62,15 @@ void housekeeping_task_user(void) {
     if (layer != last_layer) {
         last_layer = layer;
         switch (layer) {
-            case 1: force_leds(0, 80, 80); break;   // cyan (test direct WS2812)
-            case 2: force_leds(60, 0, 80); break;   // purple
-            case 3: force_leds(80, 0, 0); break;    // red
-            default: force_leds(0, 0, 0); break;    // off
+            case 1: force_leds(0, 80, 80); break;
+            case 2: force_leds(60, 0, 80); break;
+            case 3: force_leds(80, 0, 0); break;
+            default: force_leds(0, 0, 0); break;
         }
+    }
+    if (is_keyboard_master() && is_oled_on() &&
+        timer_elapsed32(master_last_activity) > MASTER_OLED_TIMEOUT_MS) {
+        oled_off();
     }
 }
 
@@ -115,6 +128,7 @@ static const uint8_t PROGMEM bulldog_pixels[128] = {
 };
 
 static void render_master(void) {
+    if (!is_oled_on()) return;
     static uint32_t anim_timer = 0;
     static uint8_t frame_idx = 0;
     if (timer_elapsed32(anim_timer) > 350) {
