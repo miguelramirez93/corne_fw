@@ -1,16 +1,19 @@
 # corne_fw — Corne RP2040 firmware (`static_ug` keymap)
 
-Custom QMK firmware for a Corne (`crkbd/rev1`) split keyboard running on Elite-Pi (RP2040) controllers, converted from the original AVR build via `CONVERT_TO=rp2040_ce`.
+Custom QMK firmware for a Corne (`crkbd/rev1`) split keyboard running on generic RP2040 "Pro Micro" controllers, converted from the original AVR build via `CONVERT_TO=rp2040_ce`.
 
 ## Features
 
 - **4 layers**: BASE / NAV / SYM / FN
 - **Per-layer underglow color** (BASE off, NAV cyan, SYM purple, FN red)
+- **Caps Lock → green underglow** (overrides layer color on both halves)
 - **Underglow only**: per-key LEDs disabled, only the 6 underglow LEDs per side
-- **Master OLED**: animated dog (WPM-reactive), current layer, Caps Lock, active modifiers
-- **Slave OLED**: static bulldog face
+- **Master OLED**: animated luna dog (sits when idle, barks while typing — speed scales with WPM), current layer, live WPM
+- **Slave OLED**: static bulldog face + `KISS!` label
+- **F1–F12** on FN top row
 - **Cross-OS screenshot key** (`SS_SEL` on layer 3) — detects host OS and sends the right shortcut
 - **Media keys** on layer 3: Mute / Prev / Play-Pause / Next / Vol-/Vol+
+- **Manual OLED sleep** on master (60 s idle) — slave uses QMK auto-timeout
 
 ## Repository layout
 
@@ -26,6 +29,8 @@ corne_fw/
     ├── png2oled.py             # PNG → SSD1306 byte array (centered)
     ├── png2oled_top.py         # PNG → byte array (top-placed)
     ├── png2oled_top_strict.py  # Same, with stricter threshold + autocontrast
+    ├── png2pixels.py           # PNG → row-major bitmap (for oled_write_pixel)
+    ├── preview_bulldog.py      # Decode byte array back to PNG for sanity-check
     ├── inspect_dog.py          # Render byte array as ASCII art
     ├── render_logo.py          # Render byte array to PNG preview
     ├── make_frame_b.py         # Generate an upward-shifted animation frame
@@ -72,7 +77,21 @@ cd ~/qmk_firmware
 qmk compile -kb crkbd/rev1 -km static_ug -e CONVERT_TO=rp2040_ce
 ```
 
-Output: `~/qmk_firmware/crkbd_rev1_static_ug_elite_pi.uf2`
+Output: `~/qmk_firmware/crkbd_rev1_static_ug_rp2040_ce.uf2`
+
+### Other `CONVERT_TO` values
+
+If your controller isn't a generic RP2040 "Pro Micro" clone, try one of these instead:
+
+| Controller | `CONVERT_TO=` |
+|---|---|
+| Generic RP2040 Pro Micro footprint | `rp2040_ce` (default in this repo) |
+| Keebio Elite-Pi | `elite_pi` |
+| 0xCB Helios | `helios` |
+| Adafruit KB2040 | `kb2040` |
+| SparkFun Pro Micro RP2040 | `promicro_rp2040` |
+
+If keys type but LEDs/OLED behave oddly on one half, the converter is likely wrong for your hardware.
 
 ## Flash
 
@@ -168,20 +187,21 @@ Hold both inner thumbs (tri-layer chord).
 
 ```
 ┌─────┐
-│ 🐕   │  ← Animated dog. Faster wag at higher WPM.
-│ 🐕   │      WPM 0     → swap every 600 ms
-│ 🐕   │      WPM 1–29  → 350 ms
-│     │      WPM 30+   → 150 ms
-│Layer│
+│ 🐕  │  ← Animated luna dog
+│ 🐕  │      Sits while idle, barks while typing
+│ 🐕  │      Wag/bark interval scales with WPM:
+│     │        WPM 0     → 600 ms (slow lazy wag)
+│Layer│        WPM 1–29  → 350 ms
 │NAV  │  ← BASE / NAV / SYM / FN
-│     │
-│Caps │
-│ON   │  ← ON when Caps Lock engaged, OFF otherwise
-│     │
-│Mod  │
-│-C-G │  ← S C A G for Shift / Ctrl / Alt / Gui (held = letter, off = -)
+│     │        WPM 30+   → 150 ms (excited bark)
+│WPM  │
+│ 47  │  ← live words-per-minute counter
 └─────┘
 ```
+
+The master OLED **auto-sleeps after 60 s** of no keypresses and wakes instantly on any keystroke. Sleep is managed manually (see "Caveats" below for why we don't use QMK's built-in `OLED_TIMEOUT` on master).
+
+Dog frames (sit + bark, 96 bytes each, 32×22 px) are adapted from [mctechnology17/qmk-config](https://github.com/mctechnology17/qmk-config)'s luna dog under MIT terms.
 
 ### Slave
 
@@ -192,10 +212,13 @@ Hold both inner thumbs (tri-layer chord).
 │ 🐶  │
 │ 🐶  │
 │     │
+│KISS!│  ← static label
 └─────┘
 ```
 
-Mods and host-OS were intentionally **not** displayed on the slave: enabling any extra split-transport sync (`SPLIT_WPM_ENABLE`, custom `SPLIT_TRANSACTION_IDS_USER`) caused the slave to drop off intermittently on this RP2040 + Elite-Pi + QMK combo. The lean-sync configuration here is stable.
+The slave OLED is **fully static** (drawn once, no per-tick updates), which lets QMK's default auto-timeout work correctly — it sleeps after 60 s of idleness and wakes on synced input activity from either half.
+
+Mods, host-OS, and WPM were intentionally **not** displayed on the slave: those would require split-transport sync (`SPLIT_WPM_ENABLE`, custom `SPLIT_TRANSACTION_IDS_USER`), which reproducibly caused the slave to drop off on this RP2040 + QMK combo. The lean-sync configuration here is stable.
 
 ## RGB / underglow config
 
@@ -224,20 +247,28 @@ static void force_leds(uint8_t r, uint8_t g, uint8_t b) {
 
 void housekeeping_task_user(void) {
     static uint8_t last_layer = 0xFF;
+    static bool last_caps = true;
     uint8_t layer = get_highest_layer(layer_state);
-    if (layer != last_layer) {
+    bool caps = host_keyboard_led_state().caps_lock;
+    if (layer != last_layer || caps != last_caps) {
         last_layer = layer;
-        switch (layer) {
-            case 1: force_leds(0, 80, 80); break;   // NAV → cyan
-            case 2: force_leds(60, 0, 80); break;   // SYM → purple
-            case 3: force_leds(80, 0, 0); break;    // FN  → red
-            default: force_leds(0, 0, 0); break;    // BASE → off
+        last_caps = caps;
+        if (caps) {
+            force_leds(0, 80, 0);                   // Caps Lock → green (overrides layer)
+        } else {
+            switch (layer) {
+                case 1: force_leds(0, 80, 80); break;   // NAV → cyan
+                case 2: force_leds(60, 0, 80); break;   // SYM → purple
+                case 3: force_leds(80, 0, 0); break;    // FN  → red
+                default: force_leds(0, 0, 0); break;    // BASE → off
+            }
         }
     }
+    // … master OLED auto-sleep logic also lives here
 }
 ```
 
-Colors are raw RGB values in QMK's WS2812 driver order (G, R, B is what the WS2812 chip wants on the wire, but the `ws2812_set_color_all` helper takes them in R, G, B order). Adjust intensities by tweaking the numbers.
+Colors are raw RGB values in `R, G, B` order (the helper handles the WS2812's GRB-on-the-wire format internally). Adjust intensities by tweaking the numbers. `SPLIT_LED_STATE_ENABLE` syncs the Caps Lock state to the slave, so both halves go green together.
 
 ## Image conversion (OLED art)
 
