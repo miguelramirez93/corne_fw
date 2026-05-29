@@ -146,6 +146,35 @@ static const uint8_t PROGMEM bulldog_pixels[128] = {
     0x00, 0x00, 0x00, 0x00,
 };
 
+// Draws a 32x24 rounded-rectangle pill at (0, y_top)-(31, y_top+23).
+// If active, the interior is filled; otherwise it's cleared.
+static void draw_pill(uint8_t y_top, bool active) {
+    uint8_t y_bottom = y_top + 23;
+    // Top and bottom edges (skip 2 px each side for rounded corners)
+    for (uint8_t x = 2; x <= 29; x++) {
+        oled_write_pixel(x, y_top, true);
+        oled_write_pixel(x, y_bottom, true);
+    }
+    // Inner corner pixels (1 px in from the cut-off corners)
+    oled_write_pixel(1, y_top + 1, true);
+    oled_write_pixel(30, y_top + 1, true);
+    oled_write_pixel(1, y_bottom - 1, true);
+    oled_write_pixel(30, y_bottom - 1, true);
+    // Left and right edges
+    for (uint8_t y = y_top + 2; y <= y_bottom - 2; y++) {
+        oled_write_pixel(0, y, true);
+        oled_write_pixel(31, y, true);
+    }
+    // Interior: fill on if active, off if not (so toggling layer cleans up properly)
+    for (uint8_t y = y_top + 1; y <= y_bottom - 1; y++) {
+        uint8_t x_start = (y == y_top + 1 || y == y_bottom - 1) ? 2 : 1;
+        uint8_t x_end   = (y == y_top + 1 || y == y_bottom - 1) ? 29 : 30;
+        for (uint8_t x = x_start; x <= x_end; x++) {
+            oled_write_pixel(x, y, active);
+        }
+    }
+}
+
 static void render_master(void) {
     if (!is_oled_on()) return;
     static uint32_t anim_timer = 0;
@@ -166,23 +195,21 @@ static void render_master(void) {
     oled_set_cursor(0, 0);
     oled_write_raw_P(frame, sizeof(dog_frame_a));
 
-    oled_set_cursor(0, 4);
-    oled_write_P(PSTR("Layer"), false);
-    oled_set_cursor(0, 5);
-    switch (get_highest_layer(layer_state)) {
-        case 0: oled_write_P(PSTR("BASE "), false); break;
-        case 1: oled_write_P(PSTR("NAV  "), false); break;
-        case 2: oled_write_P(PSTR("SYM  "), false); break;
-        case 3: oled_write_P(PSTR("FN   "), false); break;
-        default: oled_write_P(PSTR("???  "), false); break;
+    // 4 layer pills, one highlighted for the active layer.
+    uint8_t active_layer = get_highest_layer(layer_state);
+    static const uint8_t pill_y_tops[4]    = { 32, 56, 80, 104 };
+    static const uint8_t pill_text_rows[4] = {  5,  8, 11,  14 };
+    for (uint8_t i = 0; i < 4; i++) {
+        bool is_active = (i == active_layer);
+        draw_pill(pill_y_tops[i], is_active);
+        oled_set_cursor(1, pill_text_rows[i]);
+        switch (i) {
+            case 0: oled_write_P(PSTR("BASE"), is_active); break;
+            case 1: oled_write_P(PSTR("NAV"),  is_active); break;
+            case 2: oled_write_P(PSTR("SYM"),  is_active); break;
+            case 3: oled_write_P(PSTR("FN"),   is_active); break;
+        }
     }
-
-    oled_set_cursor(0, 7);
-    oled_write_P(PSTR("WPM  "), false);
-    oled_set_cursor(0, 8);
-    char wpm_buf[6];
-    snprintf(wpm_buf, sizeof(wpm_buf), "%3u  ", wpm);
-    oled_write(wpm_buf, false);
 }
 
 static void render_slave(void) {
