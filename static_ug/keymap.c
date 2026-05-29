@@ -198,9 +198,7 @@ static void render_slave(void) {
         }
     }
     oled_set_cursor(0, 5);
-    oled_write_P(PSTR("KISS "), false);
-    oled_set_cursor(0, 6);
-    oled_write_P(PSTR(" !!  "), false);
+    oled_write_P(PSTR("KISS!"), false);
 }
 
 bool oled_task_user(void) {
