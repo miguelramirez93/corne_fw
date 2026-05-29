@@ -11,6 +11,9 @@
 #define SPLIT_LAYER_STATE_ENABLE
 #define SPLIT_LED_STATE_ENABLE
 
+// Disable QMK's built-in OLED auto-timeout so our manual logic isn't fought.
+#define OLED_TIMEOUT 0
+
 #define RGBLIGHT_DEFAULT_HUE 0
 #define RGBLIGHT_DEFAULT_SAT 0
 #define RGBLIGHT_DEFAULT_VAL 128
