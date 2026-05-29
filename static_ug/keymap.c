@@ -58,14 +58,21 @@ static void force_leds(uint8_t r, uint8_t g, uint8_t b) {
 
 void housekeeping_task_user(void) {
     static uint8_t last_layer = 0xFF;
+    static bool last_caps = true;
     uint8_t layer = get_highest_layer(layer_state);
-    if (layer != last_layer) {
+    bool caps = host_keyboard_led_state().caps_lock;
+    if (layer != last_layer || caps != last_caps) {
         last_layer = layer;
-        switch (layer) {
-            case 1: force_leds(0, 80, 80); break;
-            case 2: force_leds(60, 0, 80); break;
-            case 3: force_leds(80, 0, 0); break;
-            default: force_leds(0, 0, 0); break;
+        last_caps = caps;
+        if (caps) {
+            force_leds(0, 80, 0);
+        } else {
+            switch (layer) {
+                case 1: force_leds(0, 80, 80); break;
+                case 2: force_leds(60, 0, 80); break;
+                case 3: force_leds(80, 0, 0); break;
+                default: force_leds(0, 0, 0); break;
+            }
         }
     }
     if (is_keyboard_master() && is_oled_on() &&
@@ -129,6 +136,7 @@ static const uint8_t PROGMEM bulldog_pixels[128] = {
 
 static void render_master(void) {
     if (!is_oled_on()) return;
+    oled_clear();
     static uint32_t anim_timer = 0;
     static uint8_t frame_idx = 0;
     if (timer_elapsed32(anim_timer) > 350) {
@@ -147,23 +155,10 @@ static void render_master(void) {
         case 3: oled_write_P(PSTR("FN   "), false); break;
         default: oled_write_P(PSTR("???  "), false); break;
     }
-    oled_set_cursor(0, 7);
-    oled_write_P(PSTR("Caps\n"), false);
-    oled_write_P(host_keyboard_led_state().caps_lock ? PSTR("ON ") : PSTR("OFF"), false);
-
-    oled_set_cursor(0, 10);
-    oled_write_P(PSTR("Mod\n"), false);
-    uint8_t m = get_mods();
-    char mod_str[5];
-    mod_str[0] = (m & MOD_MASK_SHIFT) ? 'S' : '-';
-    mod_str[1] = (m & MOD_MASK_CTRL)  ? 'C' : '-';
-    mod_str[2] = (m & MOD_MASK_ALT)   ? 'A' : '-';
-    mod_str[3] = (m & MOD_MASK_GUI)   ? 'G' : '-';
-    mod_str[4] = '\0';
-    oled_write(mod_str, false);
 }
 
 static void render_slave(void) {
+    oled_clear();
     for (uint8_t row = 0; row < 32; row++) {
         for (uint8_t col_byte = 0; col_byte < 4; col_byte++) {
             uint8_t byte = pgm_read_byte(&bulldog_pixels[row * 4 + col_byte]);
@@ -174,6 +169,19 @@ static void render_slave(void) {
             }
         }
     }
+    oled_set_cursor(0, 5);
+    oled_write_P(PSTR("Up\n"), false);
+    uint32_t uptime_s = timer_read32() / 1000;
+    uint32_t h = uptime_s / 3600;
+    uint8_t m = (uptime_s / 60) % 60;
+    uint8_t s = uptime_s % 60;
+    char buf[8];
+    if (h > 0) {
+        snprintf(buf, sizeof(buf), "%lu:%02u", (unsigned long)h, m);
+    } else {
+        snprintf(buf, sizeof(buf), "%u:%02u", m, s);
+    }
+    oled_write(buf, false);
 }
 
 bool oled_task_user(void) {
