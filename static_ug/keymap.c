@@ -196,9 +196,13 @@ static void render_master(void) {
     oled_set_cursor(0, 0);
     oled_write_raw_P(frame, sizeof(dog_frame_a));
 
+    // Section header just above the pills.
+    oled_set_cursor(0, 3);
+    oled_write_P(PSTR("LAYER"), false);
+
     // 4 layer pills, one highlighted for the active layer.
     uint8_t active_layer = get_highest_layer(layer_state);
-    static const uint8_t pill_y_tops[4]    = { 32, 56, 80, 104 };
+    static const uint8_t pill_y_tops[4]    = { 36, 60, 84, 108 };
     static const uint8_t pill_text_rows[4] = {  5,  8, 11,  14 };
     for (uint8_t i = 0; i < 4; i++) {
         bool is_active = (i == active_layer);
