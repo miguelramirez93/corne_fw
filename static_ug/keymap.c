@@ -170,7 +170,8 @@ static void render_master(void) {
     oled_write_raw_P(frame_idx == 0 ? dog_frame_a : dog_frame_b, sizeof(dog_frame_a));
 
     oled_set_cursor(0, 4);
-    oled_write_P(PSTR("Layer\n"), false);
+    oled_write_P(PSTR("Layer"), false);
+    oled_set_cursor(0, 5);
     switch (get_highest_layer(layer_state)) {
         case 0: oled_write_P(PSTR("BASE "), false); break;
         case 1: oled_write_P(PSTR("NAV  "), false); break;
@@ -180,9 +181,10 @@ static void render_master(void) {
     }
 
     oled_set_cursor(0, 7);
-    oled_write_P(PSTR("WPM\n"), false);
-    char wpm_buf[5];
-    snprintf(wpm_buf, sizeof(wpm_buf), "%3u ", wpm);
+    oled_write_P(PSTR("WPM  "), false);
+    oled_set_cursor(0, 8);
+    char wpm_buf[6];
+    snprintf(wpm_buf, sizeof(wpm_buf), "%3u  ", wpm);
     oled_write(wpm_buf, false);
 }
 
