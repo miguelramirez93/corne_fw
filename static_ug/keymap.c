@@ -36,20 +36,28 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     [3] = LAYOUT_split_3x6_3(KC_F1,  KC_F2, KC_F3, KC_F4, KC_F5, KC_F6, KC_F7, KC_F8, KC_F9, KC_F10, KC_F11, KC_F12, KC_NO,    KC_NO,   SS_SEL,  KC_NO,   KC_NO, KC_NO, KC_MUTE, KC_MPRV, KC_MPLY, KC_MNXT, KC_NO, KC_NO, KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO, QK_BOOT, KC_NO, KC_VOLD, KC_VOLU, KC_NO, KC_NO, KC_NO, KC_LGUI, KC_TRNS, KC_SPC, KC_ENT, KC_TRNS, KC_RALT)
 };
 
-layer_state_t layer_state_set_user(layer_state_t state) {
-    switch (get_highest_layer(state)) {
+static void apply_layer_color(uint8_t layer) {
+    switch (layer) {
         case 1: rgblight_sethsv_noeeprom(HSV_CYAN);   break;
         case 2: rgblight_sethsv_noeeprom(HSV_PURPLE); break;
         case 3: rgblight_sethsv_noeeprom(HSV_RED);    break;
         default: rgblight_sethsv_noeeprom(HSV_OFF);   break;
     }
-    return state;
 }
 
 void keyboard_post_init_user(void) {
     rgblight_enable_noeeprom();
     rgblight_mode_noeeprom(RGBLIGHT_MODE_STATIC_LIGHT);
-    rgblight_sethsv_noeeprom(HSV_OFF);
+    apply_layer_color(0);
+}
+
+void housekeeping_task_user(void) {
+    static uint8_t last_layer = 0xFF;
+    uint8_t layer = get_highest_layer(layer_state);
+    if (layer != last_layer) {
+        last_layer = layer;
+        apply_layer_color(layer);
+    }
 }
 
 #ifdef OLED_ENABLE
@@ -108,9 +116,7 @@ static const uint8_t PROGMEM bulldog_pixels[128] = {
 static void render_master(void) {
     static uint32_t anim_timer = 0;
     static uint8_t frame_idx = 0;
-    uint8_t wpm = get_current_wpm();
-    uint16_t interval = (wpm == 0) ? 600 : (wpm < 30 ? 350 : 150);
-    if (timer_elapsed32(anim_timer) > interval) {
+    if (timer_elapsed32(anim_timer) > 350) {
         anim_timer = timer_read32();
         frame_idx ^= 1;
     }
