@@ -160,7 +160,9 @@ static void render_master(void) {
     if (!is_oled_on()) return;
     static uint32_t anim_timer = 0;
     static uint8_t frame_idx = 0;
-    if (timer_elapsed32(anim_timer) > 350) {
+    uint8_t wpm = get_current_wpm();
+    uint16_t interval = (wpm == 0) ? 600 : (wpm < 30 ? 350 : 150);
+    if (timer_elapsed32(anim_timer) > interval) {
         anim_timer = timer_read32();
         frame_idx ^= 1;
     }
@@ -176,6 +178,12 @@ static void render_master(void) {
         case 3: oled_write_P(PSTR("FN   "), false); break;
         default: oled_write_P(PSTR("???  "), false); break;
     }
+
+    oled_set_cursor(0, 7);
+    oled_write_P(PSTR("WPM\n"), false);
+    char wpm_buf[5];
+    snprintf(wpm_buf, sizeof(wpm_buf), "%3u ", wpm);
+    oled_write(wpm_buf, false);
 }
 
 static void render_slave(void) {
