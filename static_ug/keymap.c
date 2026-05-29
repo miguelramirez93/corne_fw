@@ -146,10 +146,11 @@ static const uint8_t PROGMEM bulldog_pixels[128] = {
     0x00, 0x00, 0x00, 0x00,
 };
 
-// Draws a 32x24 rounded-rectangle pill at (0, y_top)-(31, y_top+23).
-// If active, the interior is filled; otherwise it's cleared.
+// Draws a 32x20 rounded-rectangle pill at (0, y_top)-(31, y_top+19).
+// If active, the interior is filled; otherwise it's cleared. Pills are placed
+// every 24 px in render_master, leaving a 4 px gap between consecutive pills.
 static void draw_pill(uint8_t y_top, bool active) {
-    uint8_t y_bottom = y_top + 23;
+    uint8_t y_bottom = y_top + 19;
     // Top and bottom edges (skip 2 px each side for rounded corners)
     for (uint8_t x = 2; x <= 29; x++) {
         oled_write_pixel(x, y_top, true);
