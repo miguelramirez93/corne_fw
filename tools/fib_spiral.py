@@ -5,8 +5,10 @@ W, H = 32, 32
 img = Image.new('1', (W, H), 1)
 draw = ImageDraw.Draw(img)
 
-b = math.log(1.618) / (math.pi / 2)
-total_turns = 2.5
+# Slower-than-golden growth so more turns stay visible at this resolution.
+growth_per_full_turn = 1.8
+b = math.log(growth_per_full_turn) / (2 * math.pi)
+total_turns = 4
 t_max = total_turns * 2 * math.pi
 target_max_r = 14
 a = target_max_r / math.exp(b * t_max)
