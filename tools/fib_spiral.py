@@ -1,11 +1,12 @@
 """Fibonacci-square spiral (Wikipedia-style: squares + quarter arcs).
-Output: 32W x 42H 1-bit PNG, with the 26x42 spiral centered horizontally."""
+6 squares (1,1,2,3,5,8) at scale 4 -> 32x52 portrait, fills slave OLED width."""
 from PIL import Image, ImageDraw
 
-fib = [1, 1, 2, 3, 5, 8, 13]
-scale = 2
+fib = [1, 1, 2, 3, 5, 8]
+scale = 4
 
-DIRS = ['R', 'D', 'L', 'U']
+# Direction sequence (D-first gives 8x13 portrait bbox)
+DIRS = ['D', 'L', 'U', 'R']
 
 squares = []
 x, y = 0, 0
@@ -29,14 +30,14 @@ W_logical = bb[2] - bb[0]
 H_logical = bb[3] - bb[1]
 squares = [(x + ox, y + oy, s, d) for x, y, s, d in squares]
 
-# Output canvas is fixed 32 wide; horizontally center the spiral.
 W_OUT = 32
-H_OUT = H_logical * scale  # 42
-x_off = (W_OUT - W_logical * scale) // 2  # (32 - 26)/2 = 3
+H_OUT = H_logical * scale
+x_off = (W_OUT - W_logical * scale) // 2
 
 img = Image.new('1', (W_OUT, H_OUT), 1)
 draw = ImageDraw.Draw(img)
 
+# Arc-center corner & PIL angles per direction (clockwise spiral).
 arc_spec = {
     'R': ('TR',  90, 180),
     'D': ('BR', 180, 270),
@@ -44,12 +45,10 @@ arc_spec = {
     'U': ('TL',   0,  90),
 }
 
-# Square outlines
 for x, y, s, d in squares:
     sx, sy, ss = x * scale + x_off, y * scale, s * scale
     draw.rectangle([(sx, sy), (sx + ss - 1, sy + ss - 1)], outline=0, width=1)
 
-# Arcs
 for x, y, s, d in squares:
     if s == 1 or d is None:
         continue
